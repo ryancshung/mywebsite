@@ -52,44 +52,72 @@ function extractEnglish(text: string): string {
 }
 
 export function QuizBoard({ deck, cards, navigate }: Props) {
-  const [index, setIndex] = useState(0);
+  const [quizCards, setQuizCards] = useState<Card[]>(cards);
+  const [stats, setStats] = useState({ again: 0, hard: 0, good: 0, easy: 0 });
   const [flipped, setFlipped] = useState(false);
-  const [done, setDone] = useState(false);
 
-  const card = cards[index];
-  const progress = (index + (flipped ? 0.5 : 0)) / cards.length;
+  const done = quizCards.length === 0;
+  const card = quizCards[0];
+  const progress = cards.length > 0 ? (cards.length - quizCards.length) / cards.length : 0;
 
-  const flip = useCallback(() => setFlipped(f => !f), []);
+  const flip = useCallback(() => setFlipped(true), []);
 
-  const goNext = useCallback(() => {
-    window.speechSynthesis?.cancel();
-    if (index >= cards.length - 1) { setDone(true); return; }
+  const handleRating = useCallback((rating: 'again' | 'hard' | 'good' | 'easy') => {
+    setStats(s => ({ ...s, [rating]: s[rating] + 1 }));
     setFlipped(false);
-    setTimeout(() => setIndex(i => i + 1), 50);
-  }, [index, cards.length]);
-
-  const goPrev = useCallback(() => {
-    if (index <= 0) return;
     window.speechSynthesis?.cancel();
-    setFlipped(false);
-    setTimeout(() => setIndex(i => i - 1), 50);
-  }, [index]);
+    
+    setTimeout(() => {
+      setQuizCards(prev => {
+        if (prev.length === 0) return [];
+        const [current, ...rest] = prev;
+        
+        if (rating === 'easy') return rest;
+        
+        switch (rating) {
+          case 'again':
+            rest.splice(Math.min(1, rest.length), 0, current);
+            break;
+          case 'hard':
+            rest.splice(Math.floor(rest.length / 2), 0, current);
+            break;
+          case 'good':
+            rest.push(current);
+            break;
+        }
+        return [...rest]; // return new array reference
+      });
+    }, 150);
+  }, []);
 
-  const restart = () => { setIndex(0); setFlipped(false); setDone(false); };
+  const restart = () => { 
+    setQuizCards(cards);
+    setStats({ again: 0, hard: 0, good: 0, easy: 0 });
+    setFlipped(false); 
+  };
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); flip(); }
-      if (e.key === 'ArrowRight') goNext();
-      if (e.key === 'ArrowLeft') goPrev();
+      if (done) return;
+      if (e.key === ' ' || e.key === 'Enter') { 
+        e.preventDefault(); 
+        if (!flipped) flip();
+        else handleRating('good');
+      }
+      if (flipped) {
+        if (e.key === '1') handleRating('again');
+        if (e.key === '2') handleRating('hard');
+        if (e.key === '3') handleRating('good');
+        if (e.key === '4') handleRating('easy');
+      }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [flip, goNext, goPrev]);
+  }, [done, flipped, flip, handleRating]);
 
   // 自動朗讀功能
   useEffect(() => {
-    if (done) return;
+    if (done || !card) return;
     if (!flipped) {
       // 正面：直接讀單字
       const timer = setTimeout(() => speak(card.word), 300);
@@ -101,7 +129,7 @@ export function QuizBoard({ deck, cards, navigate }: Props) {
         speak(englishSnippet);
       }
     }
-  }, [index, flipped, card, done]);
+  }, [card, flipped, done]);
 
   if (done) {
     return (
@@ -133,7 +161,15 @@ export function QuizBoard({ deck, cards, navigate }: Props) {
         <div className="quiz-progress-bar">
           <div className="quiz-progress-fill" style={{ width: `${progress * 100}%` }} />
         </div>
-        <div className="quiz-counter">{index + 1} / {cards.length}</div>
+        <div className="quiz-counter" style={{ textAlign: 'right' }}>
+          <div>剩餘 {quizCards.length} / 共 {cards.length}</div>
+          <div style={{ fontSize: '0.7rem', display: 'flex', gap: 6, marginTop: 4, fontWeight: 500 }}>
+            <span style={{ color: 'var(--danger)' }}>{stats.again}</span>
+            <span style={{ color: '#F59E0B' }}>{stats.hard}</span>
+            <span style={{ color: '#10B981' }}>{stats.good}</span>
+            <span style={{ color: '#3B82F6' }}>{stats.easy}</span>
+          </div>
+        </div>
       </div>
 
       {/* Flashcard */}
@@ -167,20 +203,37 @@ export function QuizBoard({ deck, cards, navigate }: Props) {
         )}
       </div>
 
-      {/* Navigation */}
-      <div className="quiz-controls">
-        <button className="btn btn-ghost" onClick={goPrev} disabled={index === 0}>
-          <ArrowLeft size={16} /> 上一題
-        </button>
-        <button className="btn btn-ghost" onClick={flip}>
-          {flipped ? '收起' : '翻面'}
-        </button>
-        <button className="btn btn-primary" onClick={goNext}>
-          {index === cards.length - 1 ? '完成' : '下一題'} <ArrowRight size={16} />
-        </button>
+      {/* Navigation / ANKI Rating */}
+      <div className="quiz-controls" style={{ display: 'flex', gap: 12, justifyContent: 'center', width: '100%', maxWidth: 560 }}>
+        {!flipped ? (
+          <button className="btn btn-primary btn-lg" style={{ width: '100%' }} onClick={flip}>
+            顯示答案 (Space)
+          </button>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, width: '100%' }}>
+            <button className="btn" onClick={() => handleRating('again')} style={{ flexDirection: 'column', border: '1px solid var(--danger)', color: 'var(--danger)', background: 'transparent' }}>
+              <span style={{ fontSize: '0.7rem', opacity: 0.8 }}>1</span>
+              <div>Again</div>
+            </button>
+            <button className="btn" onClick={() => handleRating('hard')} style={{ flexDirection: 'column', border: '1px solid #F59E0B', color: '#F59E0B', background: 'transparent' }}>
+              <span style={{ fontSize: '0.7rem', opacity: 0.8 }}>2</span>
+              <div>Hard</div>
+            </button>
+            <button className="btn" onClick={() => handleRating('good')} style={{ flexDirection: 'column', border: '1px solid #10B981', background: '#10B981', color: '#fff' }}>
+              <span style={{ fontSize: '0.7rem', opacity: 0.9 }}>3 / Space</span>
+              <div>Good</div>
+            </button>
+            <button className="btn" onClick={() => handleRating('easy')} style={{ flexDirection: 'column', border: '1px solid #3B82F6', color: '#3B82F6', background: 'transparent' }}>
+              <span style={{ fontSize: '0.7rem', opacity: 0.8 }}>4</span>
+              <div>Easy</div>
+            </button>
+          </div>
+        )}
       </div>
 
-      <div className="card-hint">← → 方向鍵換題　Space / Enter 翻面</div>
+      <div className="card-hint">
+        {!flipped ? 'Space 翻面顯示答案' : '1~4 鍵對應評價，Space 預設良好'}
+      </div>
     </div>
   );
 }
