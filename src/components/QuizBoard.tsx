@@ -52,12 +52,45 @@ function extractEnglish(text: string): string {
 }
 
 export function QuizBoard({ deck, cards, navigate }: Props) {
-  const [quizCards, setQuizCards] = useState<Card[]>(cards);
-  const [stats, setStats] = useState({ again: 0, hard: 0, good: 0, easy: 0 });
+  const STORAGE_KEY = `quiz_progress_${deck.id}`;
+  
+  // 優先從本地儲存恢復進度
+  const [quizCards, setQuizCards] = useState<Card[]>(() => {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed.quizCards) return parsed.quizCards;
+      } catch (e) { console.error('恢復進度失敗', e); }
+    }
+    return cards;
+  });
+
+  const [stats, setStats] = useState(() => {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed.stats) return parsed.stats;
+      } catch (e) {}
+    }
+    return { again: 0, hard: 0, good: 0, easy: 0 };
+  });
+
   const [flipped, setFlipped] = useState(false);
 
   const done = quizCards.length === 0;
   const card = quizCards[0];
+  
+  // 自動儲存進度
+  useEffect(() => {
+    if (done) {
+      localStorage.removeItem(STORAGE_KEY);
+    } else {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ quizCards, stats }));
+    }
+  }, [quizCards, stats, done, STORAGE_KEY]);
+
   const progress = cards.length > 0 ? (cards.length - quizCards.length) / cards.length : 0;
 
   const flip = useCallback(() => setFlipped(true), []);
@@ -91,6 +124,7 @@ export function QuizBoard({ deck, cards, navigate }: Props) {
   }, []);
 
   const restart = () => { 
+    localStorage.removeItem(STORAGE_KEY);
     setQuizCards(cards);
     setStats({ again: 0, hard: 0, good: 0, easy: 0 });
     setFlipped(false); 
