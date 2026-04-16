@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { ArrowLeft, ArrowRight, RotateCcw, Volume2 } from 'lucide-react';
+import { ArrowLeft, RotateCcw, Volume2 } from 'lucide-react';
 import type { Card, Deck, View } from '../types';
 
 interface Props {
@@ -61,7 +61,7 @@ export function QuizBoard({ deck, cards, navigate }: Props) {
       try {
         const parsed = JSON.parse(saved);
         if (parsed.quizCards) return parsed.quizCards;
-      } catch (e) { console.error('恢復進度失敗', e); }
+      } catch (e: any) { console.error('恢復進度失敗', e); }
     }
     return cards;
   });
@@ -72,7 +72,7 @@ export function QuizBoard({ deck, cards, navigate }: Props) {
       try {
         const parsed = JSON.parse(saved);
         if (parsed.stats) return parsed.stats;
-      } catch (e) {}
+      } catch (e: any) {}
     }
     return { again: 0, hard: 0, good: 0, easy: 0 };
   });
@@ -96,7 +96,7 @@ export function QuizBoard({ deck, cards, navigate }: Props) {
   const flip = useCallback(() => setFlipped(true), []);
 
   const handleRating = useCallback((rating: 'again' | 'hard' | 'good' | 'easy') => {
-    setStats(s => ({ ...s, [rating]: s[rating] + 1 }));
+    setStats((s: any) => ({ ...s, [rating]: s[rating] + 1 }));
     setFlipped(false);
     window.speechSynthesis?.cancel();
     

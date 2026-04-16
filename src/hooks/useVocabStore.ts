@@ -17,7 +17,7 @@ function load(): AppData {
 function save(data: AppData) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-  } catch (e) {
+  } catch (e: any) {
     console.error('localStorage write failed', e);
   }
 }
@@ -111,7 +111,7 @@ export function useVocabStore() {
               resolve(0);
             }
           },
-          error: (err) => reject(err),
+          error: (err: any) => reject(err),
         });
       };
       reader.onerror = () => reject(new Error('檔案讀取失敗'));
@@ -139,7 +139,7 @@ export function useVocabStore() {
           if (!Array.isArray(parsed.decks) || !Array.isArray(parsed.cards)) throw new Error('Invalid format');
           commit(parsed);
           resolve();
-        } catch (err) {
+        } catch (err: any) {
           reject(err);
         }
       };
