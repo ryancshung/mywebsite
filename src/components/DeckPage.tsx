@@ -45,8 +45,13 @@ export function DeckPage({ deck, cards, addCard, updateCard, deleteCard, importC
     try {
       const n = await importCSV(deck.id, file);
       setCsvMsg(`✓ 成功匯入 ${n} 張卡片`);
-    } catch {
-      setCsvMsg('✗ CSV 格式錯誤，請確認欄位名稱');
+    } catch (err: any) {
+      console.error(err);
+      if (err.message && err.message.includes('讀取失敗')) {
+        setCsvMsg('✗ 檔案讀取失敗（此檔案可能正被 Excel 開啟，請先關閉檔案再試一次）');
+      } else {
+        setCsvMsg('✗ CSV 格式錯誤，請確認欄位名稱或檔案編碼');
+      }
     }
   };
 

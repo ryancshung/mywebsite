@@ -5,12 +5,14 @@ import { HomePage } from './components/HomePage';
 import { DeckPage } from './components/DeckPage';
 import { QuizConfig } from './components/QuizConfig';
 import { QuizBoard } from './components/QuizBoard';
+import { LoginPage } from './components/LoginPage';
+import { WeaknessConfig } from './components/WeaknessConfig';
 import type { View } from './types';
 
 export default function App() {
-  const [view, setView] = useState<View>({ type: 'home' });
-  const [showInfo, setShowInfo] = useState(false);
   const store = useVocabStore();
+  const [view, setView] = useState<View>(() => store.data.userId ? { type: 'home' } : { type: 'login' });
+  const [showInfo, setShowInfo] = useState(false);
 
   const navigate = (v: View) => setView(v);
 
@@ -33,14 +35,26 @@ We arrived at the hotel very late at night.(我們在深夜很晚才到達飯店
   };
 
   const renderPage = () => {
+    // 沒登入時強制到 Login
+    if (!store.data.userId) {
+      return <LoginPage onLogin={(id) => { store.login(id); setView({ type: 'home' }); }} />;
+    }
+
+    if (view.type === 'login') {
+      return <LoginPage onLogin={(id) => { store.login(id); setView({ type: 'home' }); }} />;
+    }
+
     if (view.type === 'home') {
       return (
         <HomePage
+          userId={store.data.userId}
           decks={store.data.decks}
           cards={store.data.cards}
+          syncing={store.syncing}
+          lastSyncStatus={store.lastSyncStatus}
           createDeck={store.createDeck}
-          renameDeck={store.renameDeck}
           deleteDeck={store.deleteDeck}
+          logout={store.logout}
           exportJSON={store.exportJSON}
           importJSON={store.importJSON}
           navigate={navigate}
@@ -50,7 +64,7 @@ We arrived at the hotel very late at night.(我們在深夜很晚才到達飯店
 
     if (view.type === 'deck') {
       const deck = store.data.decks.find(d => d.id === view.deckId);
-      if (!deck) { navigate({ type: 'home' }); return null; }
+      if (!deck) { setView({ type: 'home' }); return null; }
       const cards = store.cardsInDeck(deck.id);
       return (
         <DeckPage
@@ -65,26 +79,26 @@ We arrived at the hotel very late at night.(我們在深夜很晚才到達飯店
       );
     }
 
-    if (view.type === 'quizConfig') {
+    if (view.type === 'quizConfig' || view.type === 'weaknessConfig') {
       const deck = store.data.decks.find(d => d.id === view.deckId);
-      if (!deck) { navigate({ type: 'home' }); return null; }
+      if (!deck) { setView({ type: 'home' }); return null; }
       const cards = store.cardsInDeck(deck.id);
-      return (
-        <QuizConfig
-          deck={deck}
-          cards={cards}
-          navigate={navigate}
-        />
-      );
+      
+      if (view.type === 'weaknessConfig') {
+        return <WeaknessConfig deck={deck} cards={cards} navigate={navigate} />;
+      }
+      return <QuizConfig deck={deck} cards={cards} navigate={navigate} />;
     }
 
     if (view.type === 'quiz') {
       const deck = store.data.decks.find(d => d.id === view.deckId);
-      if (!deck) { navigate({ type: 'home' }); return null; }
+      if (!deck) { setView({ type: 'home' }); return null; }
       return (
         <QuizBoard
           deck={deck}
           cards={view.cards}
+          mode={view.mode}
+          updateStats={store.updateCardStats}
           navigate={navigate}
         />
       );

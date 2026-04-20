@@ -1,30 +1,31 @@
-import { useState, useRef } from 'react';
-import {
-  BookOpen, Plus, Trash2, Pencil, Check, X,
-  Download, Upload, ChevronRight, PlayCircle,
+import { useState } from 'react';
+import { 
+  Plus, Trash2, ChevronRight, Layout, Settings, 
+  Cloud, CloudOff, RefreshCw, LogOut, TrendingDown,
+  Download, Upload
 } from 'lucide-react';
 import type { Deck, Card, View } from '../types';
 
 interface Props {
+  userId: string | null;
   decks: Deck[];
   cards: Card[];
+  syncing: boolean;
+  lastSyncStatus: 'idle' | 'success' | 'error';
   createDeck: (name: string) => void;
-  renameDeck: (id: string, name: string) => void;
   deleteDeck: (id: string) => void;
+  logout: () => void;
   exportJSON: () => void;
   importJSON: (file: File) => Promise<void>;
   navigate: (v: View) => void;
 }
 
 export function HomePage({
-  decks, cards, createDeck, renameDeck, deleteDeck,
-  exportJSON, importJSON, navigate,
+  userId, decks, cards, syncing, lastSyncStatus,
+  createDeck, deleteDeck, logout, exportJSON, importJSON, navigate,
 }: Props) {
   const [newName, setNewName] = useState('');
-  const [editId, setEditId] = useState<string | null>(null);
-  const [editName, setEditName] = useState('');
   const [importError, setImportError] = useState('');
-  const jsonRef = useRef<HTMLInputElement>(null);
 
   const handleCreate = () => {
     const t = newName.trim();
@@ -33,128 +34,119 @@ export function HomePage({
     setNewName('');
   };
 
-  const startEdit = (d: Deck) => {
-    setEditId(d.id);
-    setEditName(d.name);
-  };
-
-  const commitEdit = () => {
-    if (editId && editName.trim()) renameDeck(editId, editName);
-    setEditId(null);
-  };
-
-  const handleJSONImport = async (file: File) => {
-    setImportError('');
-    try {
-      await importJSON(file);
-    } catch {
-      setImportError('匯入失敗：JSON 格式不正確');
-    }
-  };
-
-  const cardCount = (deckId: string) => cards.filter(c => c.deckId === deckId).length;
-
   return (
     <div className="app-shell">
       <div className="page">
-        {/* Header */}
-        <div className="flex-row">
-          <BookOpen size={22} color="var(--accent)" />
-          <div>
-            <div className="page-title">Vocab Cards</div>
-            <div className="page-subtitle">{decks.length} 個單字庫 · {cards.length} 張卡片</div>
+        {/* Header with Sync Status */}
+        <div className="flex-row" style={{ alignItems: 'flex-start', marginBottom: 20 }}>
+          <div style={{ flex: 1 }}>
+            <div className="flex-row" style={{ gap: 12, justifyContent: 'flex-start' }}>
+              <div className="app-title">我的單字庫</div>
+              <div className={`sync-indicator ${syncing ? 'syncing' : ''}`}>
+                {syncing ? (
+                  <RefreshCw size={14} className="spin" />
+                ) : lastSyncStatus === 'error' ? (
+                  <CloudOff size={14} color="var(--danger)" />
+                ) : (
+                  <Cloud size={14} color="var(--accent)" />
+                )}
+              </div>
+            </div>
+            <div className="page-subtitle">
+              {userId} · {decks.length} 個單字庫
+            </div>
           </div>
           <div className="flex-spacer" />
-          <button className="btn btn-ghost btn-sm" onClick={exportJSON} title="匯出所有資料">
-            <Download size={15} /> 匯出
+          <button className="btn btn-ghost btn-sm" onClick={logout} style={{ color: 'var(--text-muted)' }}>
+            <LogOut size={14} /> 登出
           </button>
-          <button className="btn btn-ghost btn-sm" onClick={() => jsonRef.current?.click()} title="匯入資料">
-            <Upload size={15} /> 匯入
-          </button>
-          <input
-            ref={jsonRef}
-            type="file"
-            accept=".json"
-            style={{ display: 'none' }}
-            onChange={e => { if (e.target.files?.[0]) handleJSONImport(e.target.files[0]); e.target.value = ''; }}
-          />
         </div>
 
-        {importError && (
-          <div className="text-sm" style={{ color: 'var(--danger)' }}>{importError}</div>
-        )}
+        {/* Global actions (JSON Backup) */}
+        <div className="flex-row" style={{ marginBottom: 32, gap: 12, justifyContent: 'flex-start' }}>
+          <div className="section-label" style={{ marginBottom: 0, marginRight: 8 }}>本地備份</div>
+          <button className="btn btn-ghost btn-sm" onClick={exportJSON}>
+            <Download size={14} /> 匯出 JSON
+          </button>
+          <label className="btn btn-ghost btn-sm" style={{ cursor: 'pointer' }}>
+            <Upload size={14} /> 匯入 JSON
+            <input
+              type="file"
+              accept=".json"
+              style={{ display: 'none' }}
+              onChange={e => {
+                const file = e.target.files?.[0];
+                if (file) {
+                  importJSON(file)
+                    .then(() => alert('匯入成功！'))
+                    .catch(() => alert('匯入失敗，請檢查檔案格式。'));
+                }
+              }}
+            />
+          </label>
+        </div>
 
         {/* New deck input */}
-        <div className="flex-row">
-          <input
-            className="input"
-            placeholder="新單字庫名稱…"
-            value={newName}
-            onChange={e => setNewName(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && handleCreate()}
-          />
-          <button className="btn btn-primary" onClick={handleCreate}>
-            <Plus size={16} /> 建立
-          </button>
+        <div className="surface" style={{ padding: 20, marginBottom: 40 }}>
+          <div className="section-label">新增單字庫</div>
+          <div className="flex-row">
+            <input
+              className="input"
+              placeholder="輸入名稱，例如：日常對話、托福單字..."
+              value={newName}
+              onChange={e => setNewName(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleCreate()}
+            />
+            <button className="btn btn-primary" onClick={handleCreate}>
+              <Plus size={18} /> 建立
+            </button>
+          </div>
         </div>
 
-        {/* Deck list */}
+        {/* Decks list */}
+        <div className="section-label">所有庫 ({decks.length})</div>
         {decks.length === 0 ? (
-          <div className="empty-state">尚無單字庫。點擊「建立」開始建立你的第一個單字庫。</div>
+          <div className="empty-state">尚未建立任何單字庫。</div>
         ) : (
-          <div className="deck-list">
-            {decks.map(d => (
-              <div key={d.id} className="deck-item">
-                <BookOpen size={18} color="var(--accent)" style={{ flexShrink: 0 }} />
-
-                {editId === d.id ? (
-                  <input
-                    className="input deck-name-edit"
-                    value={editName}
-                    autoFocus
-                    onChange={e => setEditName(e.target.value)}
-                    onKeyDown={e => {
-                      if (e.key === 'Enter') commitEdit();
-                      if (e.key === 'Escape') setEditId(null);
-                    }}
-                  />
-                ) : (
-                  <span className="deck-item-name" onClick={() => navigate({ type: 'deck', deckId: d.id })}>
-                    {d.name}
-                  </span>
-                )}
-
-                <span className="deck-item-meta">{cardCount(d.id)} 張</span>
-
-                <div className="deck-actions">
-                  {editId === d.id ? (
-                    <>
-                      <button className="btn-icon" onClick={commitEdit}><Check size={15} /></button>
-                      <button className="btn-icon" onClick={() => setEditId(null)}><X size={15} /></button>
-                    </>
-                  ) : (
-                    <>
-                      <button className="btn-icon" onClick={() => startEdit(d)} title="重新命名"><Pencil size={15} /></button>
-                      <button className="btn-icon danger" onClick={() => {
-                        if (confirm(`刪除「${d.name}」及其所有單字？`)) deleteDeck(d.id);
-                      }} title="刪除"><Trash2 size={15} /></button>
-                      <button className="btn-icon" onClick={() => navigate({ type: 'deck', deckId: d.id })} title="瀏覽">
-                        <ChevronRight size={15} />
-                      </button>
-                      <button
-                        className="btn-icon"
-                        style={{ color: 'var(--accent)' }}
-                        title="開始測驗"
-                        onClick={() => navigate({ type: 'quizConfig', deckId: d.id })}
-                        disabled={cardCount(d.id) === 0}
-                      >
-                        <PlayCircle size={15} />
-                      </button>
-                    </>
-                  )}
+          <div className="deck-grid">
+            {decks.map(deck => {
+              const deckCards = cards.filter(c => c.deckId === deck.id);
+              return (
+                <div key={deck.id} className="deck-card surface">
+                  <div className="deck-card-main" onClick={() => navigate({ type: 'deck', deckId: deck.id })}>
+                    <div className="deck-card-icon"><Layout size={20} /></div>
+                    <div style={{ flex: 1 }}>
+                      <div className="deck-card-title">{deck.name}</div>
+                      <div className="deck-card-count">{deckCards.length} 張卡片</div>
+                    </div>
+                    <ChevronRight size={18} color="var(--text-muted)" />
+                  </div>
+                  
+                  <div className="deck-card-actions">
+                    <button 
+                      className="btn btn-sm btn-ghost"
+                      onClick={() => navigate({ type: 'weaknessConfig', deckId: deck.id })}
+                      style={{ color: 'var(--danger)', fontSize: '0.75rem' }}
+                      disabled={deckCards.length === 0}
+                    >
+                      <TrendingDown size={14} /> 弱點強化
+                    </button>
+                    <button 
+                      className="btn btn-sm btn-ghost" 
+                      onClick={() => navigate({ type: 'quizConfig', deckId: deck.id })}
+                      disabled={deckCards.length === 0}
+                    >
+                      <Settings size={14} /> 測驗
+                    </button>
+                    <button className="btn btn-sm btn-ghost danger" onClick={() => {
+                      if (confirm(`確定要刪除「${deck.name}」嗎？內部單字也會一併刪除。`)) deleteDeck(deck.id);
+                    }}>
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

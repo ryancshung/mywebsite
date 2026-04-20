@@ -46,7 +46,7 @@ export function QuizConfig({ deck, cards, navigate }: Props) {
 
     // 清除舊的測驗進度，確保使用新的篩選結果
     localStorage.removeItem(`quiz_progress_${deck.id}`);
-    navigate({ type: 'quiz', deckId: deck.id, cards: final });
+    navigate({ type: 'quiz', deckId: deck.id, cards: final, mode: 'normal' });
   };
 
   const countOptions = ['all', 5, 10, 20, 30, 50].filter(v => v === 'all' || (v as number) <= maxCount);
