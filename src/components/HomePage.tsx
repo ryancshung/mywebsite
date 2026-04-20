@@ -25,7 +25,6 @@ export function HomePage({
   createDeck, deleteDeck, logout, exportJSON, importJSON, navigate,
 }: Props) {
   const [newName, setNewName] = useState('');
-  const [importError, setImportError] = useState('');
 
   const handleCreate = () => {
     const t = newName.trim();
