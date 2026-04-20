@@ -15,7 +15,7 @@ export function QuizConfig({ deck, cards, navigate }: Props) {
 
   const totalCards = allTags.length === 0
     ? cards
-    : cards.filter(c => !c.tag || selectedTags.has(c.tag));
+    : cards.filter(c => c.tag && selectedTags.has(c.tag));
 
   const maxCount = totalCards.length;
   const [count, setCount] = useState<string>('all');
@@ -36,13 +36,16 @@ export function QuizConfig({ deck, cards, navigate }: Props) {
   const startQuiz = () => {
     let pool = allTags.length === 0
       ? [...cards]
-      : cards.filter(c => !c.tag || selectedTags.has(c.tag));
+      : cards.filter(c => c.tag && selectedTags.has(c.tag));
 
     if (mode === 'random') pool = pool.sort(() => Math.random() - 0.5);
 
     const n = count === 'all' ? pool.length : parseInt(count, 10);
     const final = pool.slice(0, n);
     if (final.length === 0) return;
+
+    // 清除舊的測驗進度，確保使用新的篩選結果
+    localStorage.removeItem(`quiz_progress_${deck.id}`);
     navigate({ type: 'quiz', deckId: deck.id, cards: final });
   };
 
