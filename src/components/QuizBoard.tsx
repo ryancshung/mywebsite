@@ -1,41 +1,58 @@
-import { useState, useEffect, useCallback } from 'react';
-import { ArrowLeft, RotateCcw, Volume2, TrendingDown } from 'lucide-react';
-import type { Card, Deck, View } from '../types';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { ArrowLeft, RotateCcw, Volume2, TrendingDown, CheckCircle2 } from 'lucide-react';
+import type { Card, Deck, View, AppSettings } from '../types';
 
 interface Props {
   deck: Deck;
   cards: Card[];
   mode: 'normal' | 'weakness';
+  settings?: AppSettings;
   updateStats: (id: string, rating: 'again' | 'hard' | 'good' | 'easy') => void;
   navigate: (v: View) => void;
 }
 
+// ── TTS Logic ──────────────────────────────────────────
+let voices: SpeechSynthesisVoice[] = [];
+if (typeof window !== 'undefined' && window.speechSynthesis) {
+  voices = window.speechSynthesis.getVoices();
+  window.speechSynthesis.onvoiceschanged = () => {
+    voices = window.speechSynthesis.getVoices();
+  };
+}
+
 function speak(text: string) {
   if (!text || !window.speechSynthesis) return;
+  
+  // 只提取英文部分，避免唸到中文註解
+  const englishMatches = text.match(/[a-zA-Z][a-zA-Z\s.,!?'";:-]*/g);
+  const cleanText = englishMatches ? englishMatches.join(' ').trim() : '';
+  if (!cleanText || cleanText.length < 2) return;
+
   window.speechSynthesis.cancel();
-  const utt = new SpeechSynthesisUtterance(text);
-  const voices = window.speechSynthesis.getVoices();
+  const utt = new SpeechSynthesisUtterance(cleanText);
+  
+  // 優先選擇高品質英文語音
   const englishVoices = voices.filter(v => v.lang.startsWith('en'));
   let bestVoice = englishVoices.find(v => v.name.includes('Aria') && v.name.includes('Online'));
   if (!bestVoice) bestVoice = englishVoices.find(v => v.name.includes('Google US English'));
   if (!bestVoice) bestVoice = englishVoices.find(v => v.name.includes('Samantha'));
-  if (bestVoice) { utt.voice = bestVoice; utt.lang = bestVoice.lang; } 
-  else { utt.lang = 'en-US'; }
+  if (!bestVoice) bestVoice = englishVoices[0];
+  
+  if (bestVoice) {
+    utt.voice = bestVoice;
+    utt.lang = bestVoice.lang;
+  } else {
+    utt.lang = 'en-US';
+  }
+  
   utt.rate = 0.95;
   window.speechSynthesis.speak(utt);
 }
 
-function extractEnglish(text: string): string {
-  if (!text) return '';
-  const matches = text.match(/[A-Za-z0-9\s.,!?'";:-]+/g);
-  if (!matches) return '';
-  const sentences = matches.map(s => s.trim()).filter(s => s.length > 2 && /[A-Za-z]/.test(s));
-  return sentences.join('. ');
-}
-
-export function QuizBoard({ deck, cards, mode, updateStats, navigate }: Props) {
+export function QuizBoard({ deck, cards, mode, settings, updateStats, navigate }: Props) {
   const STORAGE_KEY = `quiz_progress_${deck.id}`;
   const [sessionErrors, setSessionErrors] = useState<Record<string, number>>({});
+  const initialCount = useRef(cards.length);
 
   const [quizCards, setQuizCards] = useState<Card[]>(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
@@ -69,7 +86,22 @@ export function QuizBoard({ deck, cards, mode, updateStats, navigate }: Props) {
   }, [quizCards, stats, done, STORAGE_KEY]);
 
   const progress = cards.length > 0 ? (cards.length - quizCards.length) / cards.length : 0;
-  const flip = useCallback(() => setFlipped(true), []);
+  
+  const flip = useCallback(() => {
+    setFlipped(true);
+    // 背面自動發音
+    if (settings?.autoSpeakBack && card) {
+      speak(card.content);
+    }
+  }, [settings?.autoSpeakBack, card]);
+
+  // 正面自動發音
+  useEffect(() => {
+    if (!flipped && !done && card && settings?.autoSpeakFront) {
+      const timer = setTimeout(() => speak(card.word), 400);
+      return () => clearTimeout(timer);
+    }
+  }, [card, flipped, done, settings?.autoSpeakFront]);
 
   const handleRating = useCallback((rating: 'again' | 'hard' | 'good' | 'easy') => {
     if (!card) return;
@@ -114,12 +146,6 @@ export function QuizBoard({ deck, cards, mode, updateStats, navigate }: Props) {
     return () => window.removeEventListener('keydown', handler);
   }, [done, flipped, flip, handleRating]);
 
-  useEffect(() => {
-    if (done || !card) return;
-    if (!flipped) { setTimeout(() => speak(card.word), 300); } 
-    else { const snippet = extractEnglish(card.content); if (snippet) speak(snippet); }
-  }, [card, flipped, done]);
-
   const topErrors = Object.entries(sessionErrors)
     .sort(([, a], [, b]) => b - a)
     .slice(0, 3)
@@ -127,18 +153,34 @@ export function QuizBoard({ deck, cards, mode, updateStats, navigate }: Props) {
     .filter(Boolean) as Card[];
 
   if (done) {
+    const totalCorrect = stats.good + stats.easy;
+    const totalAnswered = stats.again + stats.hard + stats.good + stats.easy;
+    const accuracy = totalAnswered > 0 ? Math.round((totalCorrect / totalAnswered) * 100) : 0;
+
     return (
       <div className="quiz-shell" style={{ justifyContent: 'center' }}>
         <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 24, width: '100%', maxWidth: 480 }}>
           <div style={{ fontSize: '3rem' }}>{mode === 'weakness' ? '💪' : '🎉'}</div>
           <div>
-            <div className="page-title">{mode === 'weakness' ? '強化完成！' : '完成了！'}</div>
-            <div className="page-subtitle">共複習了 {cards.length} 張卡片</div>
+            <div className="page-title">{mode === 'weakness' ? '強化完成！' : '測驗完成！'}</div>
+            <div className="page-subtitle">共複習了 {initialCount.current} 張卡片</div>
           </div>
+
+          <div className="surface" style={{ width: '100%', padding: '20px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: 4 }}>正確率</div>
+              <div style={{ fontSize: '1.5rem', fontWeight: 600, color: 'var(--accent)' }}>{accuracy}%</div>
+            </div>
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: 4 }}>完成題數</div>
+              <div style={{ fontSize: '1.5rem', fontWeight: 600, color: 'var(--text-primary)' }}>{initialCount.current}</div>
+            </div>
+          </div>
+
           {topErrors.length > 0 && (
             <div className="surface" style={{ width: '100%', padding: '16px 20px', textAlign: 'left', border: '1px solid rgba(239, 68, 68, 0.2)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, color: 'var(--danger)', fontWeight: 600 }}>
-                <TrendingDown size={18} /> 本次測驗中最常出錯的單字
+                <TrendingDown size={18} /> 最需加強的單字
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {topErrors.map(c => (
@@ -150,6 +192,7 @@ export function QuizBoard({ deck, cards, mode, updateStats, navigate }: Props) {
               </div>
             </div>
           )}
+
           <div className="flex-row" style={{ marginTop: 8, gap: 12 }}>
             <button className="btn btn-ghost" onClick={() => navigate({ type: 'home' })}>
               <ArrowLeft size={15} /> 回到首頁
@@ -199,8 +242,8 @@ export function QuizBoard({ deck, cards, mode, updateStats, navigate }: Props) {
       </div>
       <div className="tts-row">
         <button className="btn btn-ghost btn-sm" onClick={() => speak(card.word)}><Volume2 size={14} /> 朗讀題目</button>
-        {flipped && extractEnglish(card.content) && (
-          <button className="btn btn-ghost btn-sm" onClick={() => speak(extractEnglish(card.content))}><Volume2 size={14} /> 朗讀例句</button>
+        {flipped && (
+          <button className="btn btn-ghost btn-sm" onClick={() => speak(card.content)}><Volume2 size={14} /> 朗讀例句</button>
         )}
       </div>
       <div className="quiz-controls" style={{ display: 'flex', gap: 12, justifyContent: 'center', width: '100%', maxWidth: 560 }}>

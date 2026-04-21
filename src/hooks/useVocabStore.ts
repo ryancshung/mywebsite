@@ -5,18 +5,24 @@ import type { Deck, Card, AppData } from '../types';
 const STORAGE_KEY = 'vocab_app_data';
 const CLOUD_URL = import.meta.env.VITE_GOOGLE_APP_SCRIPT_URL;
 
+const DEFAULT_SETTINGS: AppSettings = {
+  autoSpeakFront: true,
+  autoSpeakBack: true,
+};
+
 function loadLocal(): AppData {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return { userId: null, decks: [], cards: [] };
+    if (!raw) return { userId: null, decks: [], cards: [], settings: DEFAULT_SETTINGS };
     const parsed = JSON.parse(raw);
     return { 
       userId: parsed.userId || null, 
       decks: parsed.decks || [], 
-      cards: parsed.cards || [] 
+      cards: parsed.cards || [],
+      settings: parsed.settings || DEFAULT_SETTINGS
     };
   } catch {
-    return { userId: null, decks: [], cards: [] };
+    return { userId: null, decks: [], cards: [], settings: DEFAULT_SETTINGS };
   }
 }
 
@@ -42,13 +48,17 @@ export function useVocabStore() {
     setData(next);
   }, []);
 
+  const updateSettings = useCallback((settings: AppSettings) => {
+    const next = { ...data, settings };
+    commit(next);
+    syncToCloud(next);
+  }, [data, commit]);
+
   // ── Cloud Sync ────────────────────────────────────────
   const syncToCloud = useCallback(async (currentData: AppData) => {
     if (!currentData.userId || !CLOUD_URL) return;
     setSyncing(true);
     try {
-      // NOTE: GAS requires 'no-cors' for POST from browser often, or handled via Redir
-      // But we use it to 'push' data.
       await fetch(CLOUD_URL, {
         method: 'POST',
         mode: 'no-cors',
@@ -56,7 +66,7 @@ export function useVocabStore() {
         body: JSON.stringify({
           action: 'sync_all',
           userId: currentData.userId,
-          payload: { decks: currentData.decks, cards: currentData.cards }
+          payload: { decks: currentData.decks, cards: currentData.cards, settings: currentData.settings }
         })
       });
       setLastSyncStatus('success');
@@ -75,7 +85,12 @@ export function useVocabStore() {
       const res = await fetch(`${CLOUD_URL}?userId=${userId}&action=get_data`);
       const cloudData = await res.json();
       if (cloudData.success) {
-        const next = { userId, decks: cloudData.decks || [], cards: cloudData.cards || [] };
+        const next = { 
+          userId, 
+          decks: cloudData.decks || [], 
+          cards: cloudData.cards || [],
+          settings: cloudData.settings || DEFAULT_SETTINGS
+        };
         commit(next);
         setLastSyncStatus('success');
       }
@@ -94,7 +109,7 @@ export function useVocabStore() {
   }, [data, commit, fetchFromCloud]);
 
   const logout = useCallback(() => {
-    const next = { userId: null, decks: [], cards: [] };
+    const next = { userId: null, decks: [], cards: [], settings: DEFAULT_SETTINGS };
     commit(next);
     setLastSyncStatus('idle');
   }, [commit]);
@@ -123,7 +138,8 @@ export function useVocabStore() {
     const card: Card = { 
       id: uid(), deckId, word: word.trim(), content: content.trim(), tag: tag.trim(), 
       createdAt: Date.now(),
-      againCount: 0, hardCount: 0 
+      againCount: 0, hardCount: 0,
+      ease: 2.5, interval: 0
     };
     const next = { ...data, cards: [...data.cards, card] };
     commit(next);
@@ -145,12 +161,35 @@ export function useVocabStore() {
       ...data,
       cards: data.cards.map(c => {
         if (c.id !== id) return c;
+        
+        let newEase = c.ease || 2.5;
+        let newInterval = c.interval || 0;
+        
+        // Simple SM-2 like logic
+        if (rating === 'again') {
+          newEase = Math.max(1.3, newEase - 0.2);
+          newInterval = 0;
+        } else if (rating === 'hard') {
+          newEase = Math.max(1.3, newEase - 0.15);
+          newInterval = newInterval === 0 ? 1 : Math.ceil(newInterval * 1.2);
+        } else if (rating === 'good') {
+          newInterval = newInterval === 0 ? 1 : (newInterval === 1 ? 6 : Math.ceil(newInterval * newEase));
+        } else if (rating === 'easy') {
+          newEase += 0.15;
+          newInterval = newInterval === 0 ? 4 : (newInterval === 1 ? 7 : Math.ceil(newInterval * newEase * 1.3));
+        }
+
+        const dueAt = Date.now() + (newInterval * 24 * 60 * 60 * 1000);
+
         return {
           ...c,
           againCount: c.againCount + (rating === 'again' ? 1 : 0),
           hardCount: c.hardCount + (rating === 'hard' ? 1 : 0),
           lastResult: rating,
           lastReviewedAt: Date.now(),
+          ease: newEase,
+          interval: newInterval,
+          dueAt
         };
       }),
     };
@@ -189,7 +228,9 @@ export function useVocabStore() {
                 tag: (r['標籤 (Tag)'] ?? r['Tag'] ?? r['tag'] ?? Object.values(r)[2] ?? '').toString().trim(),
                 createdAt: Date.now(),
                 againCount: 0,
-                hardCount: 0
+                hardCount: 0,
+                ease: 2.5,
+                interval: 0
               }))
               .filter(c => c.word && c.word !== 'undefined');
 
@@ -229,15 +270,18 @@ export function useVocabStore() {
           const parsed = JSON.parse(e.target?.result as string);
           if (!Array.isArray(parsed.decks) || !Array.isArray(parsed.cards)) throw new Error('Invalid JSON');
           
-          // 保留原本的 UserId，除非匯入的檔案有指定的 UserId
           const nextData = {
             userId: parsed.userId || data.userId,
             decks: parsed.decks,
             cards: parsed.cards.map((c: any) => ({
               ...c,
               againCount: c.againCount || 0,
-              hardCount: c.hardCount || 0
-            }))
+              hardCount: c.hardCount || 0,
+              ease: c.ease || 2.5,
+              interval: c.interval || 0,
+              dueAt: c.dueAt || 0
+            })),
+            settings: parsed.settings || data.settings || DEFAULT_SETTINGS
           };
           commit(nextData);
           await syncToCloud(nextData);
@@ -247,13 +291,13 @@ export function useVocabStore() {
       reader.onerror = reject;
       reader.readAsText(file);
     });
-  }, [commit, data.userId, syncToCloud]);
+  }, [commit, data.userId, data.settings, syncToCloud]);
 
   return {
     data, syncing, lastSyncStatus,
     login, logout,
     createDeck, deleteDeck,
     addCard, updateCard, updateCardStats, deleteCard, cardsInDeck,
-    exportJSON, importJSON, importCSV
+    exportJSON, importJSON, importCSV, updateSettings
   };
 }

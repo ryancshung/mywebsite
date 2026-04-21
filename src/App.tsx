@@ -87,7 +87,15 @@ We arrived at the hotel very late at night.(我們在深夜很晚才到達飯店
       if (view.type === 'weaknessConfig') {
         return <WeaknessConfig deck={deck} cards={cards} navigate={navigate} />;
       }
-      return <QuizConfig deck={deck} cards={cards} navigate={navigate} />;
+      return (
+        <QuizConfig 
+          deck={deck} 
+          cards={cards} 
+          navigate={navigate} 
+          settings={store.data.settings} 
+          updateSettings={store.updateSettings}
+        />
+      );
     }
 
     if (view.type === 'quiz') {
@@ -98,6 +106,7 @@ We arrived at the hotel very late at night.(我們在深夜很晚才到達飯店
           deck={deck}
           cards={view.cards}
           mode={view.mode}
+          settings={store.data.settings}
           updateStats={store.updateCardStats}
           navigate={navigate}
         />
