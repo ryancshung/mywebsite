@@ -1,11 +1,11 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { ArrowLeft, RotateCcw, Volume2, TrendingDown, CheckCircle2 } from 'lucide-react';
+import { ArrowLeft, RotateCcw, Volume2, TrendingDown } from 'lucide-react';
 import type { Card, Deck, View, AppSettings } from '../types';
 
 interface Props {
   deck: Deck;
   cards: Card[];
-  mode: 'normal' | 'weakness';
+  mode: 'normal' | 'weakness' | 'random';
   settings?: AppSettings;
   updateStats: (id: string, rating: 'again' | 'hard' | 'good' | 'easy') => void;
   navigate: (v: View) => void;

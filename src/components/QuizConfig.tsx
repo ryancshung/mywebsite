@@ -82,8 +82,6 @@ export function QuizConfig({ deck, cards, navigate, settings, updateSettings }: 
     navigate({ type: 'quiz', deckId: deck.id, cards: final, mode: mode === 'weighted' ? 'random' : 'normal' });
   };
 
-  const countOptions = ['all', 5, 10, 20, 30, 50].filter(v => v === 'all' || (v as number) <= maxCount);
-
   const handleToggleSpeak = (key: keyof AppSettings) => {
     if (!settings) return;
     updateSettings({ ...settings, [key]: !settings[key] });

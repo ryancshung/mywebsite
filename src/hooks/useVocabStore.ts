@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import Papa from 'papaparse';
-import type { Deck, Card, AppData } from '../types';
+import type { Deck, Card, AppData, AppSettings } from '../types';
 
 const STORAGE_KEY = 'vocab_app_data';
 const CLOUD_URL = import.meta.env.VITE_GOOGLE_APP_SCRIPT_URL;
