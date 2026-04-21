@@ -163,31 +163,58 @@ export function QuizConfig({ deck, cards, navigate, settings, updateSettings }: 
         {/* Count */}
         <div className="surface" style={{ padding: 16 }}>
           <div className="config-section">
-            <label>每標籤抽出數量 (最少 1 題)</label>
-            <div className="flex-row" style={{ gap: 12, marginTop: 8 }}>
-              <input
-                type="number"
-                className="input"
-                style={{ flex: 1, padding: '8px 12px' }}
-                min="1"
-                value={count === 'all' ? '' : count}
-                placeholder={count === 'all' ? `預設取全部單字` : "請輸入數量"}
-                onChange={e => {
-                  const val = parseInt(e.target.value, 10);
-                  if (isNaN(val)) setCount('all');
-                  else setCount(Math.max(1, val).toString());
-                }}
-              />
-              <button 
-                className={`btn ${count === 'all' ? 'btn-primary' : 'btn-ghost'}`}
-                style={{ minWidth: 80 }}
-                onClick={() => setCount(count === 'all' ? '10' : 'all')}
-              >
-                {count === 'all' ? '已填滿' : '全部'}
-              </button>
+            <label>每標籤抽出數量</label>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 8 }}>
+              <div className="flex-row" style={{ gap: 8 }}>
+                <input
+                  type="number"
+                  className="input"
+                  style={{ flex: 1, padding: '10px 12px' }}
+                  min="1"
+                  value={count === 'all' ? '' : count}
+                  placeholder={count === 'all' ? "目前為全部單字" : "請輸入數量"}
+                  onChange={e => {
+                    const val = parseInt(e.target.value, 10);
+                    if (isNaN(val)) setCount('all');
+                    else setCount(Math.max(1, val).toString());
+                  }}
+                />
+              </div>
+              <div className="flex-row" style={{ gap: 8, flexWrap: 'wrap' }}>
+                <button 
+                  className="btn btn-ghost btn-sm" 
+                  style={{ flex: 1, border: '1px solid var(--border)' }}
+                  onClick={() => setCount('1')}
+                >
+                  最小 (1)
+                </button>
+                <button 
+                  className="btn btn-ghost btn-sm" 
+                  style={{ flex: 1, border: '1px solid var(--border)' }}
+                  onClick={() => {
+                    const activeTags = selectedTags.size === 0 ? [''] : Array.from(selectedTags);
+                    const counts = activeTags.map(tag => {
+                      const cCount = cards.filter(c => (tag === '' ? !c.tag : c.tag === tag)).length;
+                      return cCount || 0;
+                    }).filter(c => c > 0);
+                    if (counts.length > 0) {
+                      setCount(Math.min(...counts).toString());
+                    }
+                  }}
+                >
+                  最大範圍
+                </button>
+                <button 
+                  className={`btn btn-sm ${count === 'all' ? 'btn-primary' : 'btn-ghost'}`}
+                  style={{ flex: 1, border: count === 'all' ? 'none' : '1px solid var(--border)' }}
+                  onClick={() => setCount('all')}
+                >
+                  ALL (全部)
+                </button>
+              </div>
             </div>
-            <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 8 }}>
-              系統將從選取的每個標籤中，優先挑選 {count === 'all' ? '所有' : count} 題不熟的單字。
+            <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 8, lineHeight: 1.4 }}>
+              註：「最大範圍」會自動設為各標籤中數量最少的那個數字，確保每個選取標籤都能抽到相同數量的題目。
             </p>
           </div>
         </div>
