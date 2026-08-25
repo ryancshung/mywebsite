@@ -139,7 +139,7 @@ export function useVocabStore() {
       id: uid(), deckId, word: word.trim(), content: content.trim(), tag: tag.trim(), 
       createdAt: Date.now(),
       againCount: 0, hardCount: 0,
-      ease: 2.5, interval: 0
+      reviewCount: 0, ease: 2.5, interval: 0
     };
     const next = { ...data, cards: [...data.cards, card] };
     commit(next);
@@ -156,7 +156,7 @@ export function useVocabStore() {
     syncToCloud(next);
   }, [data, commit, syncToCloud]);
 
-  const updateCardStats = useCallback((id: string, rating: 'again' | 'hard' | 'good' | 'easy') => {
+  const updateCardStats = useCallback((id: string, rating: 'again' | 'hard' | 'good' | 'easy', lapseCount = 0) => {
     const next = {
       ...data,
       cards: data.cards.map(c => {
@@ -164,6 +164,12 @@ export function useVocabStore() {
         
         let newEase = c.ease || 2.5;
         let newInterval = c.interval || 0;
+
+        // 本輪曾忘記時，重新從短間隔建立記憶，不沿用舊的長間隔。
+        if (lapseCount > 0) {
+          newEase = Math.max(1.3, newEase - 0.2);
+          newInterval = 0;
+        }
         
         // Simple SM-2 like logic
         if (rating === 'again') {
@@ -183,8 +189,9 @@ export function useVocabStore() {
 
         return {
           ...c,
-          againCount: c.againCount + (rating === 'again' ? 1 : 0),
+          againCount: c.againCount + lapseCount + (rating === 'again' ? 1 : 0),
           hardCount: c.hardCount + (rating === 'hard' ? 1 : 0),
+          reviewCount: (c.reviewCount || 0) + 1,
           lastResult: rating,
           lastReviewedAt: Date.now(),
           ease: newEase,
@@ -229,6 +236,7 @@ export function useVocabStore() {
                 createdAt: Date.now(),
                 againCount: 0,
                 hardCount: 0,
+                reviewCount: 0,
                 ease: 2.5,
                 interval: 0
               }))
@@ -277,6 +285,7 @@ export function useVocabStore() {
               ...c,
               againCount: c.againCount || 0,
               hardCount: c.hardCount || 0,
+              reviewCount: c.reviewCount || 0,
               ease: c.ease || 2.5,
               interval: c.interval || 0,
               dueAt: c.dueAt || 0

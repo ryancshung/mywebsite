@@ -7,7 +7,7 @@ interface Props {
   cards: Card[];
   mode: 'normal' | 'weakness' | 'random';
   settings?: AppSettings;
-  updateStats: (id: string, rating: 'again' | 'hard' | 'good' | 'easy') => void;
+  updateStats: (id: string, rating: 'again' | 'hard' | 'good' | 'easy', lapseCount?: number) => void;
   navigate: (v: View) => void;
 }
 
@@ -22,11 +22,7 @@ if (typeof window !== 'undefined' && window.speechSynthesis) {
 
 function speak(text: string) {
   if (!text || !window.speechSynthesis) return;
-  
-  // 只提取英文部分，避免唸到中文註解
-  const englishMatches = text.match(/[a-zA-Z][a-zA-Z\s.,!?'";:-]*/g);
-  const cleanText = englishMatches ? englishMatches.join(' ').trim() : '';
-  if (!cleanText || cleanText.length < 2) return;
+  const cleanText = text.trim();
 
   window.speechSynthesis.cancel();
   const utt = new SpeechSynthesisUtterance(cleanText);
@@ -49,9 +45,27 @@ function speak(text: string) {
   window.speechSynthesis.speak(utt);
 }
 
+function getExampleText(content: string) {
+  const section = content.match(/【例句】\s*([\s\S]*?)(?=\n\s*【|$)/)?.[1] ?? '';
+  return section
+    .split('\n')
+    .map(line => line.replace(/（[^）]*）|\([^)]*\)/g, '').trim())
+    .filter(line => /[a-zA-Z]{2,}/.test(line))
+    .join(' ');
+}
+
 export function QuizBoard({ deck, cards, mode, settings, updateStats, navigate }: Props) {
   const STORAGE_KEY = `quiz_progress_${deck.id}`;
-  const [sessionErrors, setSessionErrors] = useState<Record<string, number>>({});
+  const loadSessionRecord = <T,>(key: string, fallback: T): T => {
+    try {
+      return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}')[key] || fallback;
+    } catch {
+      return fallback;
+    }
+  };
+  const [sessionErrors, setSessionErrors] = useState<Record<string, number>>(() => loadSessionRecord('sessionErrors', {}));
+  const [sessionLapses, setSessionLapses] = useState<Record<string, number>>(() => loadSessionRecord('sessionLapses', {}));
+  const [sessionHard, setSessionHard] = useState<Record<string, boolean>>(() => loadSessionRecord('sessionHard', {}));
   const initialCount = useRef(cards.length);
 
   const [quizCards, setQuizCards] = useState<Card[]>(() => {
@@ -82,16 +96,15 @@ export function QuizBoard({ deck, cards, mode, settings, updateStats, navigate }
   
   useEffect(() => {
     if (done) localStorage.removeItem(STORAGE_KEY);
-    else localStorage.setItem(STORAGE_KEY, JSON.stringify({ quizCards, stats }));
-  }, [quizCards, stats, done, STORAGE_KEY]);
+    else localStorage.setItem(STORAGE_KEY, JSON.stringify({ quizCards, stats, sessionErrors, sessionLapses, sessionHard }));
+  }, [quizCards, stats, sessionErrors, sessionLapses, sessionHard, done, STORAGE_KEY]);
 
   const progress = cards.length > 0 ? (cards.length - quizCards.length) / cards.length : 0;
   
   const flip = useCallback(() => {
     setFlipped(true);
-    // 背面自動發音
     if (settings?.autoSpeakBack && card) {
-      speak(card.content);
+      speak(getExampleText(card.content));
     }
   }, [settings?.autoSpeakBack, card]);
 
@@ -105,10 +118,11 @@ export function QuizBoard({ deck, cards, mode, settings, updateStats, navigate }
 
   const handleRating = useCallback((rating: 'again' | 'hard' | 'good' | 'easy') => {
     if (!card) return;
-    updateStats(card.id, rating);
     if (rating === 'again') {
       setSessionErrors(prev => ({ ...prev, [card.id]: (prev[card.id] || 0) + 1 }));
+      setSessionLapses(prev => ({ ...prev, [card.id]: (prev[card.id] || 0) + 1 }));
     }
+    if (rating === 'hard') setSessionHard(prev => ({ ...prev, [card.id]: true }));
     setStats((s: any) => ({ ...s, [rating]: s[rating] + 1 }));
     setFlipped(false);
     window.speechSynthesis?.cancel();
@@ -117,17 +131,24 @@ export function QuizBoard({ deck, cards, mode, settings, updateStats, navigate }
       setQuizCards(prev => {
         if (prev.length === 0) return [];
         const [current, ...rest] = prev;
-        if (rating === 'easy') return rest;
-        
         switch (rating) {
-          case 'again': rest.splice(Math.min(1, rest.length), 0, current); break;
+          case 'again': rest.splice(Math.min(2, rest.length), 0, current); break;
           case 'hard': rest.splice(Math.floor(rest.length / 2), 0, current); break;
-          case 'good': rest.push(current); break;
+          case 'good':
+          case 'easy': {
+            const finalRating = sessionHard[current.id]
+              ? 'hard'
+              : (sessionLapses[current.id] || 0) > 0
+                ? 'good'
+                : rating;
+            updateStats(current.id, finalRating, sessionLapses[current.id] || 0);
+            break;
+          }
         }
         return [...rest];
       });
     }, 150);
-  }, [card, updateStats]);
+  }, [card, sessionHard, sessionLapses, updateStats]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -168,7 +189,7 @@ export function QuizBoard({ deck, cards, mode, settings, updateStats, navigate }
 
           <div className="surface" style={{ width: '100%', padding: '20px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
             <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: 4 }}>正確率</div>
+              <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: 4 }}>本輪通過率</div>
               <div style={{ fontSize: '1.5rem', fontWeight: 600, color: 'var(--accent)' }}>{accuracy}%</div>
             </div>
             <div style={{ textAlign: 'center' }}>
@@ -242,8 +263,8 @@ export function QuizBoard({ deck, cards, mode, settings, updateStats, navigate }
       </div>
       <div className="tts-row">
         <button className="btn btn-ghost btn-sm" onClick={() => speak(card.word)}><Volume2 size={14} /> 朗讀題目</button>
-        {flipped && (
-          <button className="btn btn-ghost btn-sm" onClick={() => speak(card.content)}><Volume2 size={14} /> 朗讀例句</button>
+        {flipped && getExampleText(card.content) && (
+          <button className="btn btn-ghost btn-sm" onClick={() => speak(getExampleText(card.content))}><Volume2 size={14} /> 朗讀例句</button>
         )}
       </div>
       <div className="quiz-controls" style={{ display: 'flex', gap: 12, justifyContent: 'center', width: '100%', maxWidth: 560 }}>
@@ -266,7 +287,7 @@ export function QuizBoard({ deck, cards, mode, settings, updateStats, navigate }
           </div>
         )}
       </div>
-      <div className="card-hint">{!flipped ? 'Space 翻面顯示答案' : '1~4 鍵對應評價，Space 預設良好'}</div>
+      <div className="card-hint">{!flipped ? 'Space 翻面顯示答案' : 'Again／Hard 會在本輪重出；Good／Easy 完成本輪複習'}</div>
     </div>
   );
 }

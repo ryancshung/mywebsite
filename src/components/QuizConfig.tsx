@@ -13,13 +13,16 @@ interface Props {
 export function QuizConfig({ deck, cards, navigate, settings, updateSettings }: Props) {
   const allTags = [...new Set(cards.map(c => c.tag).filter(Boolean))];
   const [selectedTags, setSelectedTags] = useState<Set<string>>(new Set(allTags));
-  const [mode, setMode] = useState<'random' | 'sequential' | 'weighted'>('weighted');
+  const [mode, setMode] = useState<'due' | 'random' | 'sequential'>('due');
 
   const filteredCards = allTags.length === 0
     ? cards
-    : cards.filter(c => c.tag && selectedTags.has(c.tag));
+    : cards.filter(c => !c.tag || selectedTags.has(c.tag));
 
-  const maxCount = filteredCards.length;
+  const now = Date.now();
+  const dueCards = filteredCards.filter(c => !c.dueAt || c.dueAt <= now);
+  const availableCards = mode === 'due' ? dueCards : filteredCards;
+  const maxCount = availableCards.length;
   const [count, setCount] = useState<string>(maxCount > 20 ? '20' : 'all');
 
   const toggleTag = (tag: string) => {
@@ -39,31 +42,22 @@ export function QuizConfig({ deck, cards, navigate, settings, updateSettings }: 
     const nPerTag = count === 'all' ? Infinity : parseInt(count, 10);
     let finalPool: Card[] = [];
 
-    const activeTags = allTags.length === 0 ? ['__no_tag__'] : Array.from(selectedTags);
-    const now = Date.now();
+    const activeTags = allTags.length === 0 ? ['__no_tag__'] : [...Array.from(selectedTags), '__untagged__'];
 
-    activeTags.forEach(tag => {
+    if (mode === 'due') {
+      finalPool = [...dueCards]
+        .sort((a, b) => (a.dueAt || 0) - (b.dueAt || 0) || (a.interval || 0) - (b.interval || 0))
+        .slice(0, nPerTag);
+    } else activeTags.forEach(tag => {
       let tagCards = tag === '__no_tag__' 
         ? cards 
-        : cards.filter(c => c.tag === tag);
+        : tag === '__untagged__'
+          ? cards.filter(c => !c.tag)
+          : cards.filter(c => c.tag === tag);
       
       if (tagCards.length === 0) return;
 
-      if (mode === 'weighted') {
-        // 依照標籤分別進行 SRS 排序
-        tagCards.sort((a, b) => {
-          const aDue = (a.dueAt || 0) <= now;
-          const bDue = (b.dueAt || 0) <= now;
-          if (aDue && !bDue) return -1;
-          if (!aDue && bDue) return 1;
-          if ((a.interval || 0) !== (b.interval || 0)) return (a.interval || 0) - (b.interval || 0);
-          return (b.againCount || 0) - (a.againCount || 0);
-        });
-        
-        // 從該標籤挑出最不熟的前 N 題
-        const picked = tagCards.slice(0, nPerTag);
-        finalPool = [...finalPool, ...picked];
-      } else if (mode === 'random') {
+      if (mode === 'random') {
         const picked = tagCards.sort(() => Math.random() - 0.5).slice(0, nPerTag);
         finalPool = [...finalPool, ...picked];
       } else {
@@ -79,7 +73,7 @@ export function QuizConfig({ deck, cards, navigate, settings, updateSettings }: 
     const final = finalPool.sort(() => Math.random() - 0.5);
 
     localStorage.removeItem(`quiz_progress_${deck.id}`);
-    navigate({ type: 'quiz', deckId: deck.id, cards: final, mode: mode === 'weighted' ? 'random' : 'normal' });
+    navigate({ type: 'quiz', deckId: deck.id, cards: final, mode: 'normal' });
   };
 
   const handleToggleSpeak = (key: keyof AppSettings) => {
@@ -103,7 +97,7 @@ export function QuizConfig({ deck, cards, navigate, settings, updateSettings }: 
       <div className="page" style={{ paddingTop: 16 }}>
         <div>
           <div className="page-title">測驗設定</div>
-          <div className="page-subtitle">共 {maxCount} 張符合條件的卡片</div>
+          <div className="page-subtitle">{mode === 'due' ? `有 ${maxCount} 張卡片今日到期` : `共 ${maxCount} 張符合條件的卡片`}</div>
         </div>
 
         {/* Tags */}
@@ -138,11 +132,11 @@ export function QuizConfig({ deck, cards, navigate, settings, updateSettings }: 
             <label>選題演算法</label>
             <div className="flex-row" style={{ gap: 8, marginTop: 4 }}>
               <button
-                className={`btn ${mode === 'weighted' ? 'btn-primary' : 'btn-ghost'}`}
-                onClick={() => setMode('weighted')}
-                title="優先挑選不熟或該複習的單字"
+                className={`btn ${mode === 'due' ? 'btn-primary' : 'btn-ghost'}`}
+                onClick={() => setMode('due')}
+                title="只複習已到期的卡片，依逾期時間排序"
               >
-                <Shuffle size={15} /> 隨機 (SRS 加權)
+                <Shuffle size={15} /> 每日到期複習
               </button>
               <button
                 className={`btn ${mode === 'random' ? 'btn-primary' : 'btn-ghost'}`}
@@ -163,7 +157,7 @@ export function QuizConfig({ deck, cards, navigate, settings, updateSettings }: 
         {/* Count */}
         <div className="surface" style={{ padding: 16 }}>
           <div className="config-section">
-            <label>每標籤抽出數量</label>
+            <label>{mode === 'due' ? '複習數量' : '每標籤抽出數量'}</label>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 8 }}>
               <div className="flex-row" style={{ gap: 8 }}>
                 <input
@@ -214,7 +208,9 @@ export function QuizConfig({ deck, cards, navigate, settings, updateSettings }: 
               </div>
             </div>
             <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 8, lineHeight: 1.4 }}>
-              註：「最大範圍」會自動設為各標籤中數量最少的那個數字，確保每個選取標籤都能抽到相同數量的題目。
+              {mode === 'due'
+                ? '每日到期複習會跨所有選取標籤，優先安排最早到期的卡片。'
+                : '「最大範圍」會自動設為各標籤中數量最少的那個數字，確保每個選取標籤都能抽到相同數量的題目。'}
             </p>
           </div>
         </div>

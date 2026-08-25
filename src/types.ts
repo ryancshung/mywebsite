@@ -13,6 +13,7 @@ export interface Card {
   createdAt: number;
   againCount: number;      // "再次 (Again)" 點擊次數
   hardCount: number;       // "困難 (Hard)" 點擊次數
+  reviewCount?: number;    // 已完成的複習輪數
   lastResult?: 'again' | 'hard' | 'good' | 'easy';
   lastReviewedAt?: number; // 最後複習時間戳
   interval?: number;       // 複習間隔 (天)

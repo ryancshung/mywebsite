@@ -11,11 +11,13 @@ interface Props {
 export function WeaknessConfig({ deck, cards, navigate }: Props) {
   const [targetCount, setTargetCount] = useState<number | 'all'>(20);
 
-  // 弱點分數計算與排序
+  // 使用失誤率而非累積失誤次數，持續答對能逐漸降低弱點分數。
   const getWeaknessList = () => {
     return [...cards]
       .map(c => {
-        const score = (c.againCount * 2) + (c.hardCount * 1);
+        const completedReviews = Math.max(1, c.reviewCount || c.againCount + c.hardCount);
+        const recentPenalty = c.lastResult === 'hard' ? 0.5 : c.lastResult === 'again' ? 1 : 0;
+        const score = ((c.againCount * 2) + c.hardCount) / completedReviews + recentPenalty;
         return { ...c, weaknessScore: score };
       })
       .sort((a, b) => {
@@ -91,8 +93,8 @@ export function WeaknessConfig({ deck, cards, navigate }: Props) {
             <Info size={16} color="var(--accent)" style={{ marginTop: 2, flexShrink: 0 }} />
             <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
               <b>篩選邏輯：</b>系統會根據您的測驗紀錄計算「弱點分數」。<br/>
-              分數計算式：<code>(Again次數 × 2) + (Hard次數 × 1)</code>。<br/>
-              分數越高且最近一次結果為「再次 (Again)」的單字將優先出現。
+              分數以失誤率計算：<code>((Again × 2) + Hard) ÷ 完成複習輪數</code>。<br/>
+              最近感到困難的單字會額外優先；持續答對後，弱點分數會逐漸下降。
             </div>
           </div>
         </div>
