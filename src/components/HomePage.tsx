@@ -40,6 +40,11 @@ export function HomePage({
         <div className="flex-row" style={{ alignItems: 'flex-start', marginBottom: 20 }}>
           <div style={{ flex: 1 }}>
             <div className="flex-row" style={{ gap: 12, justifyContent: 'flex-start' }}>
+              <img
+                className="brand-logo brand-logo-header"
+                src={`${import.meta.env.BASE_URL}icon-192.png`}
+                alt=""
+              />
               <div className="app-title">我的單字庫</div>
               <div className={`sync-indicator ${syncing ? 'syncing' : ''}`}>
                 {syncing ? (

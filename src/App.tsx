@@ -122,7 +122,10 @@ We arrived at the hotel very late at night.(我們在深夜很晚才到達飯店
         className="btn-icon" 
         onClick={() => setShowInfo(true)}
         style={{ 
-          position: 'fixed', top: 16, right: 16, zIndex: 50, 
+          position: 'fixed',
+          top: 'calc(16px + env(safe-area-inset-top))',
+          right: 'calc(16px + env(safe-area-inset-right))',
+          zIndex: 50,
           background: 'var(--surface)', border: '1px solid var(--border)', 
           boxShadow: '0 2px 8px rgba(0,0,0,0.08)', borderRadius: '50%',
           width: 40, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center'

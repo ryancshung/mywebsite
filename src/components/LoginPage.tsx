@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { User, LogIn } from 'lucide-react';
+import { LogIn } from 'lucide-react';
 
 interface Props {
   onLogin: (userId: string) => void;
@@ -16,7 +16,8 @@ export function LoginPage({ onLogin }: Props) {
   return (
     <div className="login-shell" style={{ 
       display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', 
-      height: '100vh', background: 'var(--bg)', padding: 20 
+      minHeight: '100dvh', background: 'var(--bg)',
+      padding: 'calc(20px + env(safe-area-inset-top)) calc(20px + env(safe-area-inset-right)) calc(20px + env(safe-area-inset-bottom)) calc(20px + env(safe-area-inset-left))'
     }}>
       <div className="surface" style={{ 
         padding: '32px 24px', width: '100%', maxWidth: 400, 
@@ -24,14 +25,11 @@ export function LoginPage({ onLogin }: Props) {
         boxShadow: 'var(--shadow-lg)'
       }}>
         <div style={{ textAlign: 'center' }}>
-          <div style={{ 
-            width: 56, height: 56, background: 'var(--bg)', 
-            borderRadius: '50%', display: 'flex', alignItems: 'center', 
-            justifyContent: 'center', margin: '0 auto 16px',
-            border: '1px solid var(--border)'
-          }}>
-            <User size={28} color="var(--accent)" />
-          </div>
+          <img
+            className="brand-logo brand-logo-login"
+            src={`${import.meta.env.BASE_URL}icon-192.png`}
+            alt=""
+          />
           <div className="page-title" style={{ fontSize: '1.5rem', marginBottom: 8 }}>歡迎回來</div>
           <div className="page-subtitle">請輸入您的 User ID 或 Email 開始學習</div>
         </div>

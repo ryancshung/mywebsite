@@ -33,6 +33,7 @@ body {
   color: var(--text-primary);
   line-height: 1.6;
   min-height: 100vh;
+  min-height: 100dvh;
   -webkit-font-smoothing: antialiased;
 }
 button { font-family: inherit; cursor: pointer; border: none; }
@@ -41,6 +42,7 @@ input, textarea { font-family: inherit; }
 /* ── Layout ────────────────────────────────────────── */
 .app-shell {
   min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -49,10 +51,31 @@ input, textarea { font-family: inherit; }
 .page {
   width: 100%;
   max-width: 680px;
-  padding: 40px 24px 80px;
+  padding: calc(40px + env(safe-area-inset-top)) calc(24px + env(safe-area-inset-right)) calc(80px + env(safe-area-inset-bottom)) calc(24px + env(safe-area-inset-left));
   display: flex;
   flex-direction: column;
   gap: 24px;
+}
+
+.brand-logo {
+  display: block;
+  object-fit: cover;
+  flex: 0 0 auto;
+}
+
+.brand-logo-login {
+  width: 72px;
+  height: 72px;
+  margin: 0 auto 16px;
+  border-radius: 18px;
+  box-shadow: var(--shadow-md);
+}
+
+.brand-logo-header {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  box-shadow: var(--shadow-sm);
 }
 
 /* ── Animations ────────────────────────────────────── */
@@ -239,10 +262,19 @@ textarea.input { resize: vertical; min-height: 72px; line-height: 1.5; }
 .top-bar {
   width: 100%;
   max-width: 680px;
-  padding: 20px 24px 0;
+  padding: calc(20px + env(safe-area-inset-top)) calc(24px + env(safe-area-inset-right)) 0 calc(24px + env(safe-area-inset-left));
   display: flex;
   align-items: center;
   gap: 12px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 .top-bar-title {
   flex: 1;
